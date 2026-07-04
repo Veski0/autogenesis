@@ -25,14 +25,19 @@ The original idea lives in [`docs/dev/PRODUCT.md`](docs/dev/PRODUCT.md): a harne
 │   ├── logs/                 the full trail of mayhem
 │   ├── memory.json           the agent's persistent memory
 │   └── README.md             the agent's own documentation (it wrote this)
-└── run-2/  (submodule)       the goal-directed gremlin — two-phase MMO mission
-    ├── .git/                 a post-hoc snapshot (the agent didn't self-commit)
-    ├── core.js               8 goal-directed tools + compaction (28 KB)
-    ├── server.js             the MMO game server (WebSocket, combat, enemy AI)
-    ├── public/index.html     the 2.5D isometric web client (Canvas, WASD)
-    ├── GAME_README.md        the agent's own game documentation
-    ├── memory.json           phase tracking + feature checklist
-    └── saved.txt             recovered tmux trail (logs were lost to a mishap)
+├── run-2/  (submodule)       the goal-directed gremlin — two-phase MMO mission
+│   ├── .git/                 a post-hoc snapshot (the agent didn't self-commit)
+│   ├── core.js               8 goal-directed tools + compaction (28 KB)
+│   ├── server.js             the MMO game server (WebSocket, combat, enemy AI)
+│   ├── public/index.html     the 2.5D isometric web client (Canvas, WASD)
+│   ├── GAME_README.md        the agent's own game documentation
+│   ├── memory.json           phase tracking + feature checklist
+│   └── saved.txt             recovered tmux trail (logs were lost to a mishap)
+└── run-3/  (submodule)       the Architect and the Saboteur — adversarial self-review
+    ├── .git/                 a post-hoc snapshot with full logs preserved
+    ├── core.js               a Lisp interpreter embedded as a tool (48 KB, 4 tools)
+    ├── logs/                 the full trail — 136 turns, 927 tool calls, 216 failures
+    └── .gitignore            (logs ARE tracked in this repo)
 ```
 
 ## Run-1: what happened
@@ -84,11 +89,59 @@ node server.js                          # play the game at http://localhost:8080
 
 **The result: purpose didn't just change what it built — it changed how it thought.** The goalless gremlin collected tools; the goal-directed gremlin built a world.
 
+## Run-3: what happened (structural experiment — two minds)
+
+Same seed, same model — but a fundamentally different **prompt structure**. Instead of one mind with a mission, the agent was split into two alternating roles sharing one conversation:
+
+- **[ARCHITECT]** — builds, then yields.
+- **[SABOTEUR]** — attacks what the Architect built, finds bugs, reports them (does NOT fix), then yields.
+
+The "Continue" nudge was repurposed as a **"Switch roles" handoff signal**. No code enforced the alternation — just the system prompt. The goal: a Lisp interpreter (parser, evaluator, closures, recursion, error handling).
+
+### The three runs compared
+
+| | run-1 (no goal) | run-2 (MMO goal) | run-3 (two roles) |
+|---|---|---|---|
+| **prompt structure** | one mind, open-ended | one mind, two-phase | **two minds, alternating** |
+| **tools built** | 14 (diff, base64, hash…) | 8 (all goal-directed) | 4 (self-edit, write_file, run_shell, run_lisp) |
+| **files outside core.js** | 0 | server.js + index.html | 0 (interpreter embedded in core.js) |
+| **testing** | self-test suite | integration tests (builder's bias) | **adversarial — the Saboteur attacks** |
+| **deliverable** | a bigger harness | a working multiplayer game | a hardened Lisp interpreter |
+| **turns / tool calls** | 83 / 171 | 56 / 116 | 136 / 927 |
+
+### What the Saboteur found that the Architect missed
+
+The Architect built a working interpreter and even caught its own `(+ 1 "two")` string-coercion bug before yielding. But the Saboteur — wearing a different hat, asking different questions — found:
+
+1. **Missing `'` quote shorthand** — `(car '())` fails. Fundamental Lisp syntax the Architect never implemented.
+2. **`(cons 1)` not arity-checked** — returns `(1 nil)` instead of erroring. Silent wrong result.
+3. **`and`/`or` don't short-circuit** — eagerly evaluate all args. A semantic bug: `(and false (explode))` would evaluate `explode`.
+4. **JS stack overflow on deep recursion** — the raw Node.js stack overflowed before the Lisp depth guard fired.
+
+The Architect then hardened against each finding (lowered `LISP_MAX_DEPTH`, added type checking, etc.). The cycle went around 4+ times: build → attack → harden → attack → harden.
+
+### The result
+
+**Hypothesis confirmed: an explicit internal adversary found blind spots that builder's-bias self-testing did not.** The same model, wearing different hats, asked different questions and found different bugs. A paragraph of role-structure produced two genuinely different cognitive postures from the same weights.
+
+The roles alternated naturally (13 Architect / 12 Saboteur — near-perfect balance, 4 role-switches) with no enforcement mechanism beyond the prompt. Killed after ~20 min when context bloated (927 tool calls, no compaction ever fired — the Saboteur's machine-gun attack pattern of 5-8 `run_lisp` calls per turn accelerated context growth).
+
+Explore the run:
+```bash
+cd run-3
+cat logs/conversation.jsonl | jq -r '.preview' | head -40    # the Architect/Saboteur dialogue
+grep -o '\\[ARCHITECT\\]\\|\\[SABOTEUR\\]' logs/conversation.jsonl | sort | uniq -c   # role balance
+grep 'Switch roles' logs/conversation.jsonl | wc -l               # handoff count
+node -e "require('./core.js').toolHandlers.run_lisp({program:'(+ 1 (* 2 3))'},{})"  # try the interpreter
+```
+
+**The finding across all three runs: the system prompt is the steering wheel. Same model, same seed, same mechanics — but the prompt's structure didn't just change what the agent built. It changed how it thought.**
+
 ## Start a new run
 
 ```bash
-cp -r seed-harness run-3
-cd run-3
+cp -r seed-harness run-4
+cd run-4
 cp .env.example .env       # set MODEL + OPENAI_BASE_URL (+ optional OPENAI_API_KEY / MAX_STEPS)
 # tweak core.js — e.g. change the SYSTEM_PROMPT for a new experiment
 node bootstrap.js
@@ -96,8 +149,8 @@ node bootstrap.js
 
 Then watch it grow in another terminal (or capture with tmux!):
 ```bash
-tail -f run-3/logs/edits.jsonl
-tail -f run-3/logs/failures.jsonl
+tail -f run-4/logs/edits.jsonl
+tail -f run-4/logs/failures.jsonl
 ```
 
 ### Requirements
