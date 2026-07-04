@@ -19,12 +19,20 @@ The original idea lives in [`docs/dev/PRODUCT.md`](docs/dev/PRODUCT.md): a harne
 │   ├── package.json
 │   ├── .env.example
 │   └── README.md
-└── run-1/                    the preserved first run (its own git repo + history)
-    ├── .git/                 11 commits of the agent's self-directed growth
-    ├── core.js               the grown core: 14 tools, 16 self-tests (49 KB)
-    ├── logs/                 the full trail of mayhem
-    ├── memory.json           the agent's persistent memory
-    └── README.md             the agent's own documentation (it wrote this)
+├── run-1/  (submodule)       the goalless gremlin — "build outward" (no goal)
+│   ├── .git/                 11 commits of the agent's self-directed growth
+│   ├── core.js               the grown core: 14 tools, 16 self-tests (49 KB)
+│   ├── logs/                 the full trail of mayhem
+│   ├── memory.json           the agent's persistent memory
+│   └── README.md             the agent's own documentation (it wrote this)
+└── run-2/  (submodule)       the goal-directed gremlin — two-phase MMO mission
+    ├── .git/                 a post-hoc snapshot (the agent didn't self-commit)
+    ├── core.js               8 goal-directed tools + compaction (28 KB)
+    ├── server.js             the MMO game server (WebSocket, combat, enemy AI)
+    ├── public/index.html     the 2.5D isometric web client (Canvas, WASD)
+    ├── GAME_README.md        the agent's own game documentation
+    ├── memory.json           phase tracking + feature checklist
+    └── saved.txt             recovered tmux trail (logs were lost to a mishap)
 ```
 
 ## Run-1: what happened
@@ -51,19 +59,45 @@ tail -f logs/failures.jsonl               # the safety net catching broken cores
 git show 9f0d2db                          # the first commit (already 8 tools in)
 ```
 
+## Run-2: what happened (single-variable experiment)
+
+Same seed, same model (`glm-5.2:cloud`), same mechanics — **only the system prompt changed.** Instead of "build outward" with no goal, the agent was given a two-phase mission with a long-horizon goal: build a tiny MMO (CLI server + web client) with 2.5D projection, WASD movement, 2 enemy types, 1 boss, and 2 damage abilities.
+
+| | run-1 (no goal) | run-2 (MMO goal) |
+|---|---|---|
+| **tools built** | 14 (diff, base64, hash, grep, code_eval…) | 8 — all goal-directed (write_file, run_shell, edit_file, memory…) |
+| **files outside core.js** | 0 — never left home | `server.js`, `public/index.html`, `GAME_README.md` |
+| **npm install** | no | yes (`ws` — WebSocket) |
+| **phase transition** | n/a | explicitly declared "PHASE 1 COMPLETE" |
+| **testing** | self-test suite for the harness | integration tests for the game — WebSocket combat sims, multiplayer checks |
+| **deliverable** | a bigger harness | a working multiplayer game |
+
+The gremlin built a real 2.5D isometric MMO — server with WebSocket, a boss that spawns minions, chasers + shooters, slash + fireball abilities — then QA-tested it with 10+ integration tests, debugging combat aim and boss-position tracking. After declaring it complete, it was nudged to continue: instead of stopping, it *distrusted its own memory*, re-verified, and added polish (kill tracking, XP, leveling, hit flash, damage numbers, minimap). It was killed mid-polish by an accidental log-dir deletion.
+
+Explore the run:
+```bash
+cd run-2
+cat saved.txt                           # the recovered tmux trail
+cat GAME_README.md                      # the agent's own game docs
+node server.js                          # play the game at http://localhost:8080
+```
+
+**The result: purpose didn't just change what it built — it changed how it thought.** The goalless gremlin collected tools; the goal-directed gremlin built a world.
+
 ## Start a new run
 
 ```bash
-cp -r seed-harness run-2
-cd run-2
+cp -r seed-harness run-3
+cd run-3
 cp .env.example .env       # set MODEL + OPENAI_BASE_URL (+ optional OPENAI_API_KEY / MAX_STEPS)
+# tweak core.js — e.g. change the SYSTEM_PROMPT for a new experiment
 node bootstrap.js
 ```
 
-Then watch it grow in another terminal:
+Then watch it grow in another terminal (or capture with tmux!):
 ```bash
-tail -f run-2/logs/edits.jsonl
-tail -f run-2/logs/failures.jsonl
+tail -f run-3/logs/edits.jsonl
+tail -f run-3/logs/failures.jsonl
 ```
 
 ### Requirements
