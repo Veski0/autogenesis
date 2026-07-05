@@ -7,3 +7,6 @@
 [submodule "run-3"]
 	path = run-3
 	url = https://github.com/Veski0/autogenesis-run-3.git
+[submodule "run-4"]
+	path = run-4
+	url = https://github.com/Veski0/autogenesis-run-4.git
