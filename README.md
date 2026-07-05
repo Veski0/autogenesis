@@ -44,6 +44,10 @@ The original idea lives in [`docs/dev/PRODUCT.md`](docs/dev/PRODUCT.md): a harne
     ├── AGENT_README.md       the agent's own documentation (it wrote this)
     ├── agent_memory.json     persistent memory with goals + session logs
     └── logs/                 the full trail — 125 turns, 818 tool calls, 46 auto-self-tests
+└── run-5/  (submodule)       the Squeeze — urgency + Ollama, delegation stays thin
+    ├── .git/                 a post-hoc snapshot (logs lost to mishap, trail in saved.txt)
+    ├── core.js               20 tools, 87 tests, estimateTokens (79 KB)
+    └── saved.txt             recovered tmux trail — 100 steps, 4 local_llm calls
 ```
 
 ## Run-1: what happened
@@ -104,17 +108,18 @@ Same seed, same model — but a fundamentally different **prompt structure**. In
 
 The "Continue" nudge was repurposed as a **"Switch roles" handoff signal**. No code enforced the alternation — just the system prompt. The goal: a Lisp interpreter (parser, evaluator, closures, recursion, error handling).
 
-### The four runs compared
+### The five runs compared
 
-| | run-1 (no goal) | run-2 (MMO goal) | run-3 (two roles) | run-4 (Ollama) |
-|---|---|---|---|---|
-| **prompt structure** | one mind, open-ended | one mind, two-phase | two minds, alternating | one mind + local resource |
-| **tools built** | 14 (diff, base64…) | 8 (all goal-directed) | 4 (run_lisp) | 16 (log_analytics, ollama_chat…) |
-| **files outside core.js** | 0 | server.js + index.html | 0 | AGENT_README.md, agent_memory.json |
-| **testing** | self-test suite | integration tests | adversarial | **automated after every edit** |
-| **deliverable** | a bigger harness | a working multiplayer game | a hardened Lisp interpreter | a meta-cognitive self-improver |
-| **turns / tool calls** | 83 / 171 | 56 / 116 | 136 / 927 | 125 / 818 |
-| **used Ollama?** | — | — | — | built tool, tested once, barely used |
+| | run-1 (no goal) | run-2 (MMO goal) | run-3 (two roles) | run-4 (Ollama) | run-5 (urgency) |
+|---|---|---|---|---|---|
+| **prompt structure** | one mind, open-ended | one mind, two-phase | two minds, alternating | one mind + resource | one mind + resource + scarcity |
+| **tools built** | 14 | 8 | 4 | 16 | 20 |
+| **files outside core.js** | 0 | server.js + index.html | 0 | AGENT_README.md | 0 |
+| **testing** | self-test suite | integration tests | adversarial | automated after every edit | 87 tests (5→87) |
+| **deliverable** | a bigger harness | a working multiplayer game | a hardened Lisp interpreter | a meta-cognitive self-improver | 20 tools + budget tracker |
+| **turns / tool calls** | 83 / 171 | 56 / 116 | 136 / 927 | 125 / 818 | 100 / 163 |
+| **used Ollama?** | — | — | — | 2 calls (math test) | 4 calls (ideas, review) |
+| **Ollama for compaction?** | — | — | — | no (truncation) | no (truncation) |
 
 ### What the Saboteur found that the Architect missed
 
@@ -142,7 +147,7 @@ grep 'Switch roles' logs/conversation.jsonl | wc -l               # handoff coun
 node -e "require('./core.js').toolHandlers.run_lisp({program:'(+ 1 (* 2 3))'},{})"  # try the interpreter
 ```
 
-**The finding across all four runs: the system prompt is the steering wheel. Same model, same seed, same mechanics — but the prompt's structure didn't just change what the agent built. It changed how it thought.** See [FINDINGS.md](FINDINGS.md) for a detailed cross-run analysis.
+**The finding across all five runs: the system prompt is the steering wheel. Same model, same seed, same mechanics — but the prompt's structure didn't just change what the agent built. It changed how it thought.** See [FINDINGS.md](FINDINGS.md) for a detailed cross-run analysis.
 
 ## Run-4: what happened (resource experiment — Ollama)
 
@@ -175,11 +180,33 @@ grep '"tool":"ollama_chat"' logs/tools.jsonl                # the 2 Ollama calls
 node -e "require('./core.js').toolHandlers.log_analytics({}, {holder:{log:{}}})"  # self-analytics
 ```
 
+## Run-5: what happened (scarcity experiment — urgency + Ollama)
+
+Same seed, same model, same "build outward" mission as run-1/run-4 — with the Ollama resource section revised to create **scarcity**: "your tokens are finite and time-gated, you must conserve your context — create a reliable mechanism for utilising free intelligence." The only variable vs run-4 is urgency.
+
+### The Ollama result (urgency moved the needle, but not far enough)
+
+Ollama usage doubled: **4 `local_llm` calls** vs run-4's 2. Used for idea generation (3) and code review (1) — never for actual work or compaction. The agent built `estimateTokens()` (a token budget tracker) and said "zero tokens spent from the main LLM" — it heard the urgency. But it never used Ollama for compaction (still truncation), never built a delegation system, and delegation was driven by planner templates ("try delegating a task"), not spontaneous need.
+
+### Notable moments
+
+- **Self-identity**: the agent described itself to the local model: "You are an autonomous software agent with 16 tools…"
+- **Budget awareness**: built `estimateTokens()` and said "zero tokens spent" — but didn't change spending habits
+- **Hardware blindness**: made parallel `local_llm` calls not realising Ollama processes one model at a time (3.5 min wait)
+- **Tool collector**: 20 tools (the most of any run), 87 tests — still collecting, not conserving
+
+Explore the run:
+```bash
+cd run-5
+cat saved.txt                           # the recovered tmux trail (100 steps)
+grep 'local_llm' saved.txt | head -10     # the 4 Ollama delegation calls
+```
+
 ## Start a new run
 
 ```bash
-cp -r seed-harness run-5
-cd run-5
+cp -r seed-harness run-6
+cd run-6
 cp .env.example .env       # set MODEL + OPENAI_BASE_URL (+ optional OPENAI_API_KEY / MAX_STEPS)
 # tweak core.js — e.g. change the SYSTEM_PROMPT for a new experiment
 node bootstrap.js
@@ -187,8 +214,8 @@ node bootstrap.js
 
 Then watch it grow in another terminal (or capture with tmux!):
 ```bash
-tail -f run-5/logs/edits.jsonl
-tail -f run-5/logs/failures.jsonl
+tail -f run-6/logs/edits.jsonl
+tail -f run-6/logs/failures.jsonl
 ```
 
 ### Requirements

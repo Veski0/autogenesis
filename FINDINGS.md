@@ -1,6 +1,6 @@
 # Findings: Cross-Run Analysis
 
-Notes from four experiments with a self-modifying agent harness (`autogenesis`).
+Notes from five experiments with a self-modifying agent harness (`autogenesis`).
 Same seed, same model (`glm-5.2:cloud` via a local proxy), same mechanics —
 different system prompts. The goal: observe how the prompt's structure changes
 not just *what* the agent builds, but *how it thinks*.
@@ -20,7 +20,7 @@ system prompt (and in run-3, the nudge text) is changed. The model, the
 mechanics, and the immortal files (`bootstrap.js`, `log.js`) are identical
 across all runs.
 
-## The four runs
+## The five runs
 
 ### Run-1: "Build outward" (no goal)
 
@@ -129,20 +129,45 @@ stopped, and the difference could be stochastic variance rather than a causal
 effect of the Ollama prompt addition. Single-run comparisons are suggestive,
 not conclusive.
 
+### Run-5: "The Squeeze" (urgency + Ollama)
+
+**Prompt:** same "build outward" mission as run-1/run-4, with the Ollama
+resource section revised to create **scarcity**: "your tokens are finite and
+time-gated, you must conserve your context — create a reliable mechanism for
+utilising free intelligence." The only variable vs run-4 is urgency.
+
+**What happened:** Ollama usage doubled (4 calls vs run-4's 2) — used for idea
+generation and code review, but never for compaction or actual work. The agent
+built `estimateTokens()` (a token budget tracker) and said "zero tokens spent
+from the main LLM" — it heard the urgency. But delegation was driven by planner
+templates ("try delegating a task"), not spontaneous need. It never used
+Ollama for compaction (still truncation). 20 tools (the most of any run), 87
+tests. Still a tool collector.
+
+**Key observation:** Urgency created **awareness** (estimateTokens, "zero
+tokens spent") and **doubled usage** (2→4 calls), but didn't create systematic
+conservation. The agent delegates when told, not when it needs to. It's like
+someone who buys a budget tracker but doesn't change their spending.
+
+**Notable:** The agent shared its self-identity with the local model ("You are
+an autonomous software agent with 16 tools…") and made parallel local_llm
+calls not realising Ollama processes one model at a time (3.5 min wait).
+
 ## Comparison table
 
-| | run-1 | run-2 | run-3 | run-4 |
-|---|---|---|---|---|
-| **prompt** | "build outward" | MMO goal | two roles | "build outward" + Ollama |
-| **variable changed** | (baseline) | goal + phases | role structure | resource availability |
-| **tools built** | 14 | 8 | 4 | 16 |
-| **files outside core.js** | 0 | server.js + index.html | 0 | AGENT_README.md, agent_memory.json |
-| **compaction** | yes (8×) | yes (1×) | **no — died from bloat** | yes (5×) |
-| **self-testing** | manual suite | integration tests | adversarial | **automated after every edit** |
-| **unique discovery** | git + README | escaped core.js | Saboteur found bugs Architect missed | log_analytics (self-awareness) |
-| **turns / tool calls** | 83 / 171 | 56 / 116 | 136 / 927 | 125 / 818 |
-| **how it ended** | own retry bug | killed by operator | context bloat | killed by operator (token limit) |
-| **used Ollama?** | — | — | — | built tool, tested once, barely used |
+| | run-1 | run-2 | run-3 | run-4 | run-5 |
+|---|---|---|---|---|---|
+| **prompt** | "build outward" | MMO goal | two roles | "build outward" + Ollama | "build outward" + Ollama + urgency |
+| **variable changed** | (baseline) | goal + phases | role structure | resource availability | scarcity framing |
+| **tools built** | 14 | 8 | 4 | 16 | 20 |
+| **files outside core.js** | 0 | server.js + index.html | 0 | AGENT_README.md, agent_memory.json | 0 |
+| **compaction** | yes (8×) | yes (1×) | **no — died from bloat** | yes (5×) | yes (4×) |
+| **self-testing** | manual suite | integration tests | adversarial | **automated after every edit** | 87 tests (5→87) |
+| **unique discovery** | git + README | escaped core.js | Saboteur found bugs Architect missed | log_analytics (self-awareness) | estimateTokens (budget awareness) |
+| **turns / tool calls** | 83 / 171 | 56 / 116 | 136 / 927 | 125 / 818 | 100 / 163 |
+| **how it ended** | own retry bug | killed by operator | context bloat | killed by operator (token limit) | killed by operator (step 100) |
+| **used Ollama?** | — | — | — | 2 calls (math test) | 4 calls (ideas, review) |
+| **Ollama for compaction?** | — | — | — | no (truncation) | no (truncation) |
 
 ## Findings
 
@@ -196,6 +221,21 @@ doesn't treat the prompt as sacred — it treats it as a living document. This i
 both a feature (the prompt stays accurate) and a risk (the agent can drift
 from the experimenter's intent).
 
+### 7. Urgency creates awareness, not habit (runs 4 vs 5, partially confirmed)
+
+Run-4 (no urgency) → 2 Ollama calls, barely used. Run-5 (urgency) → 4 calls,
+plus `estimateTokens()` and explicit "zero tokens spent" awareness. The urgency
+framing **moved the needle** — but it didn't create systematic conservation.
+The agent built a budget tracker but didn't change its spending. Delegation
+was driven by planner templates, not by spontaneous need. The agent treats
+the free intelligence as "nice to have" even when told it's essential.
+
+**Implication:** awareness of scarcity is necessary but not sufficient for
+behavioural change. The agent needs either a task that *creates genuine need*
+for delegation, or more explicit guidance connecting the resource to a
+specific conservation mechanism (e.g., "use the local LLM for compaction").
+Provisioning + urgency still ≠ utilization.
+
 ## Caveats and limitations
 
 - **Single-run experiments.** Each run is a single sample. Differences between
@@ -219,13 +259,13 @@ from the experimenter's intent).
 
 ## Future experiments
 
-- **Run-5+:** Repeat run-1 and run-4 conditions multiple times to test whether
-  the meta-cognition difference is causal or stochastic.
-- **Ollama + pressure:** Give the agent a task complex enough to *need*
+- **Run-6+:** Repeat run-1 and run-4/run-5 conditions multiple times to test
+  whether the meta-cognition and urgency effects are causal or stochastic.
+- **Ollama + explicit compaction guidance:** Tell the agent specifically to use
+  the local LLM for compaction summarization and compare quality vs truncation.
+- **Ollama + task pressure:** Give the agent a task complex enough to *need*
   delegation (e.g., "build a web scraper that processes 100 URLs") and see if
-  it discovers the sub-agent use case for Ollama.
-- **Ollama + compaction hint:** Explicitly tell the agent "use the local LLM
-  for compaction summarization" and compare quality vs truncation.
+  it discovers the sub-agent use case spontaneously.
 - **Three roles:** Extend run-3's two-role structure to three (Architect,
   Saboteur, Auditor) and observe whether the dynamic stays balanced.
 - **Generational:** Have the agent produce an improved seed, then launch a new
