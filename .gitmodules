@@ -13,3 +13,6 @@
 [submodule "run-5"]
 	path = run-5
 	url = https://github.com/Veski0/autogenesis-run-5.git
+[submodule "run-6"]
+	path = run-6
+	url = https://github.com/Veski0/autogenesis-run-6.git
